@@ -4,9 +4,11 @@
 ## 가상환경 설치
 ```
 conda env create -f bmsvisualization.yaml
+conda activate rnd
 ```
 
 ## 웹 서버 실행
 ```
-python ./src/app.py
+cd ./src
+python app.py
 ```

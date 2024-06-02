@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.5.1/nouislider.min.css" rel="stylesheet">
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.18.1/full/pyodide.js"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+
+    <script src="/static/components/scatterplot.js"></script>
+    <script src="/static/components/histogram.js"></script>
+    <script src="/static/components/datatable.js"></script>
+    <script src="/static/components/level_slider.js"></script>
+
+    <title>BMS Data Visualization</title>
+    <style>
+        body {
+            background: #eee;
+            overflow-y: scroll;
+        }
+
+        #loadingSpinner {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .container {
+            width: 800px;
+            background: white;
+        }
+
+        .brushed {
+            stroke-width: 1;
+            stroke: gray;
+            r: 5;
+        }
+
+        .noUi-value {
+            font-size: 12px;
+        }
+        .noUi-pips-horizontal .noUi-value {
+            margin-top: 10px;
+        }
+        .noUi-pips {
+            height: 40px;
+            margin-bottom: 5px;
+        }
+
+        .col-1-5 {
+            flex: 0 0 auto;
+            width: 10.0%;
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .table-container {
+            margin-bottom: 100px;
+        }
+
+        td {
+            overflow-wrap: break-word;
+        }
+
+        .title-column {
+            width: 220px;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+
+        .clear-column {
+            width: 180px;
+        }
+
+        .rank-column {
+            width: 100px;
+        }
+        
+        .normal-column {
+            width: 100px;
+        }
+
+        .sortable {
+            cursor: pointer;
+        }
+        .asc::after {
+            content: ' ▲';
+        }
+        .desc::after {
+            content: ' ▼';
+        }
+
+        .pagination-buttons {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .pagination-buttons.visible {
+            opacity: 1;
+        }
+
+        .form-check-input {
+            z-index: 1000;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <nav class="container navbar navbar-light bg-light">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">BMS Data Visualization</span>
+            </div>
+        </nav>
+
+    </header>
+
+    <main class="container pb-3 pe-3">
+        <div class="row pt-3 pe-3">
+            <div class="col-1 text-end pe-2"><strong>Level:</strong></div>
+            <div class="col-11">
+                <div id="slider"></div>
+            </div>
+        </div>
+        <div class="row pt-5">
+            <div class="col-1 text-end pe-2"><strong>Clear:</strong></div>
+            <div class="col offset">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-no_play" checked>
+                    <label class="form-check-label" for="claer-no_play">NO PLAY</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-failed" checked>
+                    <label class="form-check-label" for="claer-failed">FAILED</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-easy" checked>
+                    <label class="form-check-label" for="clear-easy">EASY</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-normal" checked>
+                    <label class="form-check-label" for="clear-normal">NORMAL</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-hard" checked>
+                    <label class="form-check-label" for="clear-hard">HARD</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="clear-fc" checked>
+                    <label class="form-check-label" for="clear-fc">FULL COMBO</label>
+                </div>
+            </div>
+        </div>
+        <div class="row pt-1">
+            <div class="col offset-1">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="use-clear_color">
+                    <label class="form-check-label" for="use-clear_color">Clear Color-encode</label>
+                </div>
+            </div>
+        </div>
+        <div class="text-center">
+            <svg width="400" height="400" id="scatterplot">
+                <foreignObject x="590" y="270" width="100" height="50">
+                    <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
+                        Upload
+                    </button>
+                </foreignObject>
+            </svg>
+            <div class="tooltip bs-tooltip-top show" id="sc-tooltip" role="tooltip" style="display:none">
+                <div class="tooltip-arrow"></div>
+                <div class="tooltip-inner">
+                    Some tooltip text!
+                </div>
+            </div>
+            <input type="file" id="fileInput" style="display:none;" />
+            <div id="loadingSpinner"></div>
+        </div>
+        <div class="text-center">
+            <svg width="400" height="400" id="histogram">
+            </svg>
+            <div class="tooltip bs-tooltip-top show" id="hg-tooltip" role="tooltip" style="display:none">
+                <div class="tooltip-arrow"></div>
+                <div class="tooltip-inner">
+                    Some tooltip text!
+                </div>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="table table-striped text-center">
+                <thead>
+                    <tr>
+                        <th class="sortable normal-column" data-column="level">Level</th>
+                        <th class="sortable title-column" data-column="title">Title</th>
+                        <th class="sortable clear-column" data-column="clear">Clear</th>
+                        <th class="sortable normal-column" data-column="bad_and_poor">BP</th>
+                        <th class="sortable rank-column" data-column="rank">Rank</th>
+                    </tr>
+                </thead>
+                <tbody id="data-table">
+    
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination-buttons">
+            <button type="button" class="btn btn-primary" id="prevPage">◀</button>
+            <span id="pageDisplay"></span>
+            <button type="button" class="btn btn-primary" id="nextPage">▶</button>
+        </div>
+    </main>
+
+    <script>
+        const jsonFilePath = '/static/data/bms_dataset.json';
+        
+        let allData, filteredData, levelFilteredData, clearFilteredData, brushedData, scatterplot, level_slider, histogram, dataTable, checkboxes;
+        let uploadedData = []
+        
+        let stackVar = "clear"
+
+        function updateScatterplot() {
+            let useClearColor = d3.select("#use-clear_color").property("checked");
+            scatterplot.update(filteredData, uploadedData, useClearColor)
+        }
+
+        function updateHistogram() {
+            histogram.update(brushedData && brushedData.length > 0 ? brushedData : filteredData, "level", stackVar);
+        }
+
+        function updateDataTable() {
+            dataTable.update(brushedData && brushedData.length > 0 ? brushedData : filteredData)
+        }
+
+        function filterDataByClear() {
+            const noPlayChecked = document.getElementById('clear-no_play').checked;
+            const failedChecked = document.getElementById('clear-failed').checked;
+            const easyChecked = document.getElementById('clear-easy').checked;
+            const normalChecked = document.getElementById('clear-normal').checked;
+            const hardChecked = document.getElementById('clear-hard').checked;
+            const fcChecked = document.getElementById('clear-fc').checked;
+
+            return allData.filter(d => {
+                if (d['clear'] === 0 && noPlayChecked) return true;
+                if (d['clear'] === 1 && failedChecked) return true;
+                if (d['clear'] === 2 && easyChecked) return true;
+                if (d['clear'] === 3 && normalChecked) return true;
+                if (d['clear'] === 4 && hardChecked) return true;
+                if (d['clear'] === 5 && fcChecked) return true;
+                return false;
+            });
+        }
+
+        d3.json(jsonFilePath).then(jsonData => {
+            allData = jsonData;
+            levelFilteredData = allData;
+            clearFilteredData = allData;
+            filteredData = allData;
+
+            scatterplot = new Scatterplot("#scatterplot", "#sc-tooltip", allData);
+            scatterplot.initialize();
+            updateScatterplot();
+            d3.selectAll("#use-clear_color").on("change", updateScatterplot);
+
+            histogram = new Histogram("#histogram", "#hg-tooltip", allData);
+            histogram.initialize();
+            updateHistogram();
+
+            level_slider = new LevelSlider('slider', allData)
+            level_slider.initialize();
+
+            dataTable = new DataTable("#data-table", allData);
+            updateDataTable();
+
+            scatterplot.on("brush", (brushedItems) => {
+                brushedData = brushedItems;
+                updateHistogram();
+                updateDataTable();
+            })
+
+            level_slider.noUiSlider.on('update', (values, handle) => {
+                levelFilteredData = level_slider.filterDataByLevel(values[0], values[1]);
+                filteredData = [...new Set(levelFilteredData)].filter(item => clearFilteredData.includes(item));
+                updateScatterplot();
+                updateHistogram();
+                updateDataTable();
+            });
+
+            document.querySelectorAll('.form-check-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    clearFilteredData = filterDataByClear();
+                    filteredData = [...new Set(levelFilteredData)].filter(item => clearFilteredData.includes(item));
+                    updateScatterplot();
+                    updateHistogram();
+                    updateDataTable();
+                });
+            });
+        });
+
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('loadingSpinner').style.display = 'block';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(processedData => {
+                    uploadedData.push(processedData)
+                    updateScatterplot();
+                    updateHistogram();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                })
+                .finally(() => {
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const table = document.querySelector('#data-table');
+            const paginationButtons = document.querySelector('.pagination-buttons');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        paginationButtons.classList.add('visible');
+                    } else {
+                        paginationButtons.classList.remove('visible');
+                    }
+                });
+            }, {
+                root: null,
+                threshold: 0.1
+            });
+
+            observer.observe(table);
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.5.1/nouislider.min.js"></script>
+</body>
+
+</html>
